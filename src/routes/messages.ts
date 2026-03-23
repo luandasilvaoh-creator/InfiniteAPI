@@ -1,7 +1,10 @@
 import { Router, type Request, type Response } from 'express';
+import fs from 'node:fs';
 import { getInstance } from '../services/whatsapp.js';
 import { toJid, isConnected } from '../utils/helpers.js';
 import { config } from '../config.js';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const router = Router();
 
@@ -252,31 +255,56 @@ router.post('/send_carousel_helpers', async (req: Request, res: Response) => {
       }>;
     };
 
-    if (!to || !Array.isArray(cards) || cards.length === 0) {
-      return res.status(400).json({ ok: false, error: 'missing to/cards' });
+    if (!to || !Array.isArray(cards) || cards.length < 2) {
+      return res.status(400).json({ ok: false, error: 'O Carrossel precisa de pelo menos 2 cards para ser compatível com o WhatsApp.' });
     }
     const limited = cards.slice(0, config.limits.maxCarouselCards);
 
     const ctx = validateInstance(instance, res);
     if (!ctx) return;
 
+    const __dirname = path.dirname(fileURLToPath(import.meta.url));
+    const rootDir = path.resolve(__dirname, '..', '..');
+    const publicDir = path.join(rootDir, 'public');
+
     const jid = toJid(to);
     if (!jid) return res.status(400).json({ ok: false, error: 'invalid_phone' });
 
-    const formattedCards = limited.map((card, idx) => ({
-      title: card.title ?? `Card ${idx + 1}`,
-      body: card.body ?? '',
-      footer: card.footer,
-      image: card.imageUrl ? { url: card.imageUrl } : undefined,
-      buttons: (card.buttons ?? []).map((btn, bIdx) => ({
-        type: 'reply' as const,
-        id: btn.id ?? `card${idx}_btn${bIdx}`,
-        text: btn.text ?? 'Botão',
-      })),
-    }));
+    const formattedCards = limited.map((card, idx) => {
+      let imageContent: any = undefined;
+      const url = card.imageUrl;
+      if (url) {
+        if (url.startsWith('/uploads/')) {
+          const relativePath = url.startsWith('/') ? url.substring(1) : url;
+          const localPath = path.join(publicDir, relativePath);
+          
+          if (fs.existsSync(localPath)) {
+            imageContent = fs.readFileSync(localPath);
+          } else {
+            imageContent = { url: `http://localhost:${config.port}${url}` };
+          }
+        } else {
+          imageContent = { url };
+        }
+      }
+
+      return {
+        title: card.title ?? `Card ${idx + 1}`,
+        body: card.body ?? '',
+        footer: card.footer || '',
+        image: imageContent,
+        buttons: (card.buttons ?? []).map((btn, bIdx) => ({
+          type: 'reply' as const,
+          id: btn.id ?? `card${idx}_btn${bIdx}`,
+          text: btn.text ?? 'Botão',
+        })),
+      };
+    });
 
     const result = await ctx.sock.sendMessage(jid, {
-      nativeCarousel: { cards: formattedCards },
+      nativeCarousel: { 
+        cards: formattedCards,
+      },
       text: text ? String(text) : undefined,
       footer: footer ? String(footer) : undefined,
     });
