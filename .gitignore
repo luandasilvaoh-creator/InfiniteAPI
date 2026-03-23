@@ -4,3 +4,4 @@ auth/
 .env
 *.log
 .DS_Store
+public/uploads/
