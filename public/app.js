@@ -358,11 +358,80 @@
       <div class="form-row"><input type="text" placeholder="Título" data-field="title"></div>
       <div class="form-row"><input type="text" placeholder="Corpo/descrição" data-field="body"></div>
       <div class="form-row"><input type="text" placeholder="Rodapé" data-field="footer"></div>
-      <div class="form-row"><input type="text" placeholder="URL da imagem" data-field="imageUrl"></div>
+      <div class="form-row">
+        <label>Imagem (URL ou Upload)</label>
+        <input type="text" placeholder="URL da imagem (ou use o botão abaixo)" data-field="imageUrl">
+        <input type="file" accept="image/*" class="file-upload-input hidden">
+        <button type="button" class="btn btn-upload">📁 Upload do Computador</button>
+        <div class="preview-container"><img src="" alt="Preview"></div>
+      </div>
       <div class="sub-list card-buttons"></div>
       <button type="button" class="btn btn-small btn-ghost add-card-btn">+ Botão no card</button>
       <button type="button" class="btn btn-small btn-danger btn-remove-block">Remover card</button>
     `;
+
+    const urlInput = block.querySelector('[data-field="imageUrl"]');
+    const fileInput = block.querySelector('.file-upload-input');
+    const uploadBtn = block.querySelector('.btn-upload');
+    const previewContainer = block.querySelector('.preview-container');
+    const previewImg = previewContainer.querySelector('img');
+
+    uploadBtn.addEventListener('click', () => fileInput.click());
+
+    fileInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        const base64 = event.target.result;
+        
+        uploadBtn.textContent = '⏳ Subindo...';
+        uploadBtn.disabled = true;
+
+        try {
+          const res = await fetch(`${API}/v1/media/upload`, {
+            method: 'POST',
+            headers: headers(),
+            body: JSON.stringify({ base64, filename: file.name }),
+          });
+          const data = await res.json();
+          if (data.ok && data.url) {
+            urlInput.value = data.url;
+            previewImg.src = data.url;
+            previewContainer.style.display = 'block';
+            uploadBtn.textContent = '✅ Upload Concluído';
+          } else {
+            alert('Erro no upload: ' + (data.error || 'Erro desconhecido'));
+            uploadBtn.textContent = '❌ Erro no Upload';
+          }
+        } catch (err) {
+          alert('Erro de rede no upload');
+          uploadBtn.textContent = '❌ Erro de Rede';
+        } finally {
+          uploadBtn.disabled = false;
+          setTimeout(() => {
+            if (uploadBtn.textContent.includes('Concluído')) {
+              uploadBtn.textContent = '📁 Alterar Imagem';
+            } else {
+              uploadBtn.textContent = '📁 Upload do Computador';
+            }
+          }, 2000);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+
+    urlInput.addEventListener('input', () => {
+      const val = urlInput.value.trim();
+      if (val && (val.startsWith('http') || val.startsWith('data:image'))) {
+        previewImg.src = val;
+        previewContainer.style.display = 'block';
+      } else {
+        previewContainer.style.display = 'none';
+      }
+    });
+
     block.querySelector('.add-card-btn').addEventListener('click', () => {
       const row = document.createElement('div');
       row.className = 'item-row';

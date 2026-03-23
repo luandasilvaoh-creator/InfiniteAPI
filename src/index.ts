@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { config } from './config.js';
 import instancesRouter from './routes/instances.js';
 import messagesRouter from './routes/messages.js';
+import mediaRouter from './routes/media.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -28,6 +29,7 @@ app.get('/health', (_req, res) => {
 // API key só nas rotas /v1 (a interface em / carrega sem key)
 app.use('/v1/instances', apiKeyMiddleware, instancesRouter);
 app.use('/v1/messages', apiKeyMiddleware, messagesRouter);
+app.use('/v1/media', apiKeyMiddleware, mediaRouter);
 
 const publicDir = path.join(__dirname, '..', 'public');
 app.use(express.static(publicDir));
